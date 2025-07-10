@@ -130,6 +130,8 @@ void MacUtils::setLaunchAtStartup(bool enable)
     if (enable) {
         QSettings agent(getLaunchAgentFilename(), QSettings::NativeFormat);
         agent.setValue("Label", qApp->property("KPXC_QUALIFIED_APPNAME").toString());
+        agent.setValue("AssociatedBundleIdentifiers", qApp->property("KPXC_QUALIFIED_APPNAME").toString());
+        agent.setValue("Program", QApplication::applicationFilePath());
         agent.setValue("ProgramArguments", QStringList() << QApplication::applicationFilePath());
         agent.setValue("RunAtLoad", true);
         agent.setValue("StandardErrorPath", "/dev/null");
@@ -146,6 +148,26 @@ bool MacUtils::isCapslockEnabled()
 #else
     return false;
 #endif
+}
+
+void MacUtils::setUserInputProtection(bool enable)
+{
+    static bool secureInputEnabled = false;
+    if (enable) {
+        /*
+         * MacOS keeps a single counter over all apps that needs to be zero to disable secure input. By never going
+         * higher than 1 internally this makes sure secure input doesn't stay active after calling this function
+         * multiple times.
+         */
+        if (secureInputEnabled) {
+            DisableSecureEventInput();
+        }
+        EnableSecureEventInput();
+    } else {
+        DisableSecureEventInput();
+    }
+    // Store our last known state
+    secureInputEnabled = enable;
 }
 
 /**

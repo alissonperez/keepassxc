@@ -72,6 +72,7 @@ void PassphraseGenerator::setWordList(const QString& path)
     }
 
     QTextStream in(&file);
+    in.setCodec("UTF-8");
     QString line = in.readLine();
     bool isSigned = line.startsWith("-----BEGIN PGP SIGNED MESSAGE-----");
     if (isSigned) {
@@ -98,7 +99,7 @@ void PassphraseGenerator::setWordList(const QString& path)
 
     m_wordlist = wordset.toList();
 
-    if (m_wordlist.size() < m_minimum_wordlist_length) {
+    if (!isWordListValid()) {
         qWarning("Wordlist is less than minimum acceptable size: %s", qPrintable(path));
     }
 }
@@ -116,12 +117,12 @@ void PassphraseGenerator::setWordSeparator(const QString& separator)
 
 QString PassphraseGenerator::generatePassphrase() const
 {
-    // In case there was an error loading the wordlist
-    if (!isValid() || m_wordlist.empty()) {
+    if (m_wordlist.isEmpty()) {
         return {};
     }
 
     QStringList words;
+    int randomIndex = randomGen()->randomUInt(static_cast<quint32>(m_wordCount));
     for (int i = 0; i < m_wordCount; ++i) {
         int wordIndex = randomGen()->randomUInt(static_cast<quint32>(m_wordlist.size()));
         auto tmpWord = m_wordlist.at(wordIndex);
@@ -134,6 +135,9 @@ QString PassphraseGenerator::generatePassphrase() const
         case TITLECASE:
             tmpWord = tmpWord.replace(0, 1, tmpWord.left(1).toUpper());
             break;
+        case MIXEDCASE:
+            tmpWord = i == randomIndex ? tmpWord.toUpper() : tmpWord.toLower();
+            break;
         case LOWERCASE:
             tmpWord = tmpWord.toLower();
             break;
@@ -144,7 +148,7 @@ QString PassphraseGenerator::generatePassphrase() const
     return words.join(m_separator);
 }
 
-bool PassphraseGenerator::isValid() const
+bool PassphraseGenerator::isWordListValid() const
 {
-    return m_wordCount > 0 && m_wordlist.size() >= m_minimum_wordlist_length;
+    return m_wordlist.size() >= m_minWordListSize;
 }

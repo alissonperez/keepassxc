@@ -22,6 +22,7 @@
 #include "core/Global.h"
 
 #include <QDateTime>
+#include <QFileInfo>
 #include <QList>
 #include <QProcessEnvironment>
 
@@ -46,6 +47,15 @@ namespace Tools
     QString envSubstitute(const QString& filepath,
                           QProcessEnvironment environment = QProcessEnvironment::systemEnvironment());
     QString cleanFilename(QString filename);
+
+    template <class T> QSet<T> asSet(const QList<T>& a)
+    {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
+        return QSet<T>(a.begin(), a.end());
+#else
+        return QSet<T>::fromList(a);
+#endif
+    }
 
     /**
      * Escapes all characters in regex such that they do not receive any special treatment when used
@@ -118,6 +128,21 @@ namespace Tools
     QVariantMap qo2qvm(const QObject* object, const QStringList& ignoredProperties = {"objectName"});
 
     QString substituteBackupFilePath(QString pattern, const QString& databasePath);
+
+    enum class MimeType : uint8_t
+    {
+        Image,
+        PlainText,
+        Html,
+        Markdown,
+        Unknown
+    };
+
+    MimeType toMimeType(const QString& mimeName);
+    MimeType getMimeType(const QByteArray& data);
+    MimeType getMimeType(const QFileInfo& fileInfo);
+    bool isTextMimeType(MimeType mimeType);
+
 } // namespace Tools
 
 #endif // KEEPASSX_TOOLS_H

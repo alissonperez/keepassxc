@@ -49,6 +49,7 @@
 #include "gui/databasekey/KeyFileEditWidget.h"
 #include "gui/databasekey/PasswordEditWidget.h"
 #include "gui/dbsettings/DatabaseSettingsDialog.h"
+#include "gui/dbsettings/DatabaseSettingsWidgetEncryption.h"
 #include "gui/entry/EditEntryWidget.h"
 #include "gui/entry/EntryView.h"
 #include "gui/group/EditGroupWidget.h"
@@ -471,8 +472,28 @@ void TestGui::testEditEntry()
     QCOMPARE(entry->historyItems().size(), ++editCount);
     QVERIFY(!applyButton->isEnabled());
 
+    // Test viewing entry history
+    auto historyView = editEntryWidget->findChild<QTreeView*>("historyView");
+    auto showButton = editEntryWidget->findChild<QPushButton*>("showButton");
+    QVERIFY(historyView);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::History);
+    QApplication::processEvents();
+    QVERIFY(historyView->isVisible());
+    QVERIFY(!showButton->isEnabled());
+    // Select the second row in the history view
+    historyView->setCurrentIndex(historyView->model()->index(1, 0));
+    QVERIFY(showButton->isEnabled());
+    QTest::mouseClick(showButton, Qt::LeftButton);
+    // Verify that the entry history widget is shown
+    auto entryHistoryWidget = m_dbWidget->findChild<QWidget*>("editEntryHistoryWidget");
+    QVERIFY(entryHistoryWidget);
+    QVERIFY(entryHistoryWidget->isVisible());
+    QCOMPARE(m_dbWidget->currentMode(), DatabaseWidget::Mode::EditEntryMode);
+    QTest::keyClick(entryHistoryWidget, Qt::Key_Escape);
+    QVERIFY(historyView->isVisible());
+
     // Test the "known bad" checkbox
-    editEntryWidget->setCurrentPage(1);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::Advanced);
     auto excludeReportsCheckBox = editEntryWidget->findChild<QCheckBox*>("excludeReportsCheckBox");
     QVERIFY(excludeReportsCheckBox);
     QCOMPARE(excludeReportsCheckBox->isChecked(), false);
@@ -495,7 +516,7 @@ void TestGui::testEditEntry()
     QCOMPARE(tags->tags().last(), QString("tag 2_is!awesome"));
 
     // Test entry colors (simulate choosing a color)
-    editEntryWidget->setCurrentPage(1);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::Advanced);
     auto fgColor = QString("#FF0000");
     auto bgColor = QString("#0000FF");
     // Set foreground color
@@ -512,7 +533,7 @@ void TestGui::testEditEntry()
     QCOMPARE(entry->historyItems().size(), ++editCount);
 
     // Test protected attributes
-    editEntryWidget->setCurrentPage(1);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::Advanced);
     auto* attrTextEdit = editEntryWidget->findChild<QPlainTextEdit*>("attributesEdit");
     QTest::mouseClick(editEntryWidget->findChild<QAbstractButton*>("addAttributeButton"), Qt::LeftButton);
     QString attrText = "TEST TEXT";
@@ -522,7 +543,7 @@ void TestGui::testEditEntry()
     QVERIFY(attrTextEdit->toPlainText().contains("PROTECTED"));
     QTest::mouseClick(editEntryWidget->findChild<QAbstractButton*>("revealAttributeButton"), Qt::LeftButton);
     QCOMPARE(attrTextEdit->toPlainText(), attrText);
-    editEntryWidget->setCurrentPage(0);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::Main);
 
     // Save the edit (press OK)
     QTest::mouseClick(okButton, Qt::LeftButton);
@@ -851,11 +872,12 @@ void TestGui::testDicewareEntryEntropy()
         // Verify entropy and strength
         auto* entropyLabel = pwGeneratorWidget->findChild<QLabel*>("entropyLabel");
         auto* strengthLabel = pwGeneratorWidget->findChild<QLabel*>("strengthLabel");
-        auto* wordLengthLabel = pwGeneratorWidget->findChild<QLabel*>("charactersInPassphraseLabel");
+        auto* wordLengthLabel = pwGeneratorWidget->findChild<QLabel*>("passwordLengthLabel");
 
-        QTRY_COMPARE_WITH_TIMEOUT(entropyLabel->text(), QString("Entropy: 77.55 bit"), 200);
+        QTRY_COMPARE_WITH_TIMEOUT(entropyLabel->text(), QString("Entropy: 77.54 bit"), 200);
         QCOMPARE(strengthLabel->text(), QString("Password Quality: Good"));
-        QCOMPARE(wordLengthLabel->text().toInt(), pwGeneratorWidget->getGeneratedPassword().size());
+        QCOMPARE(wordLengthLabel->text(),
+                 QString("Characters: %1").arg(QString::number(pwGeneratorWidget->getGeneratedPassword().length())));
 
         QTest::mouseClick(generatedPassword, Qt::LeftButton);
         QTest::keyClick(generatedPassword, Qt::Key_Escape););
@@ -901,7 +923,7 @@ void TestGui::testTotp()
     QCOMPARE(m_dbWidget->currentMode(), DatabaseWidget::Mode::EditEntryMode);
 
     auto* editEntryWidget = m_dbWidget->findChild<EditEntryWidget*>("editEntryWidget");
-    editEntryWidget->setCurrentPage(1);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::Advanced);
     auto* attrTextEdit = editEntryWidget->findChild<QPlainTextEdit*>("attributesEdit");
     QTest::mouseClick(editEntryWidget->findChild<QAbstractButton*>("revealAttributeButton"), Qt::LeftButton);
     QCOMPARE(attrTextEdit->toPlainText(), expectedFinalSeed);
@@ -1484,7 +1506,7 @@ void TestGui::testDatabaseSettings()
     int autosaveDelayTestValue = 2;
 
     dbSettingsCategoryList->setCurrentCategory(1); // go into security category
-    auto securityTabWidget = dbSettingsStackedWidget->findChild<QTabWidget*>();
+    auto securityTabWidget = dbSettingsStackedWidget->findChild<QTabWidget*>("securityTabWidget");
     QCOMPARE(securityTabWidget->currentIndex(), 0);
 
     // Interact with the password edit option
@@ -1623,7 +1645,7 @@ void TestGui::testDatabaseSettings()
     QTest::keyClicks(titleEdit, "Test autosaveDelay 1");
 
     // 2.b) Save changes
-    editEntryWidget->setCurrentPage(0);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::Main);
     auto* editEntryWidgetButtonBox = editEntryWidget->findChild<QDialogButtonBox*>("buttonBox");
     QTest::mouseClick(editEntryWidgetButtonBox->button(QDialogButtonBox::Ok), Qt::LeftButton);
 
@@ -1637,7 +1659,7 @@ void TestGui::testDatabaseSettings()
     QTest::keyClicks(titleEdit, "Test autosaveDelay 2");
 
     // 2.e) Save changes
-    editEntryWidget->setCurrentPage(0);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::Main);
     editEntryWidgetButtonBox = editEntryWidget->findChild<QDialogButtonBox*>("buttonBox");
     QTest::mouseClick(editEntryWidgetButtonBox->button(QDialogButtonBox::Ok), Qt::LeftButton);
 
@@ -1657,7 +1679,7 @@ void TestGui::testDatabaseSettings()
     QTest::keyClicks(titleEdit, "Test autosaveDelay 3");
 
     // 4.b) Save changes
-    editEntryWidget->setCurrentPage(0);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::Main);
     editEntryWidgetButtonBox = editEntryWidget->findChild<QDialogButtonBox*>("buttonBox");
     QTest::mouseClick(editEntryWidgetButtonBox->button(QDialogButtonBox::Ok), Qt::LeftButton);
 
@@ -1676,7 +1698,7 @@ void TestGui::testDatabaseSettings()
     QTest::mouseClick(entryNewWidget, Qt::LeftButton);
     QCOMPARE(m_dbWidget->currentMode(), DatabaseWidget::Mode::EditEntryMode);
     QTest::keyClicks(titleEdit, "Test autosaveDelay 4");
-    editEntryWidget->setCurrentPage(0);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::Main);
     editEntryWidgetButtonBox = editEntryWidget->findChild<QDialogButtonBox*>("buttonBox");
     QTest::mouseClick(editEntryWidgetButtonBox->button(QDialogButtonBox::Ok), Qt::LeftButton);
     Tools::wait(150); // due to modify timer
@@ -1922,7 +1944,7 @@ void TestGui::testAutoType()
     QTest::keyClicks(usernameComboBox, "AutocompletionUsername");
 
     // 1.b) Uncheck Auto-Type checkbox
-    editEntryWidget->setCurrentPage(3);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::AutoType);
     auto* enableAutoTypeButton = editEntryWidget->findChild<QCheckBox*>("enableButton");
     QVERIFY(enableAutoTypeButton);
     QVERIFY(enableAutoTypeButton->isVisible());
@@ -1932,7 +1954,7 @@ void TestGui::testAutoType()
     QVERIFY(!enableAutoTypeButton->isChecked());
 
     // 1.c) Save changes
-    editEntryWidget->setCurrentPage(0);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::Main);
     auto* editEntryWidgetButtonBox = editEntryWidget->findChild<QDialogButtonBox*>("buttonBox");
     QTest::mouseClick(editEntryWidgetButtonBox->button(QDialogButtonBox::Ok), Qt::LeftButton);
 
@@ -1946,13 +1968,13 @@ void TestGui::testAutoType()
     QTest::keyClicks(usernameComboBox, "AutocompletionUsername");
 
     // 2.b) Confirm AutoType is enabled and default
-    editEntryWidget->setCurrentPage(3);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::AutoType);
     QVERIFY(enableAutoTypeButton->isChecked());
     auto* inheritSequenceButton = editEntryWidget->findChild<QRadioButton*>("inheritSequenceButton");
     QVERIFY(inheritSequenceButton->isChecked());
 
     // 2.c) Save changes
-    editEntryWidget->setCurrentPage(0);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::Main);
     QTest::mouseClick(editEntryWidgetButtonBox->button(QDialogButtonBox::Ok), Qt::LeftButton);
 
     // 3. Create an entry with custom Auto-Type sequence
@@ -1965,7 +1987,7 @@ void TestGui::testAutoType()
     QTest::keyClicks(usernameComboBox, "AutocompletionUsername");
 
     // 3.b) Confirm AutoType is enabled and set custom sequence
-    editEntryWidget->setCurrentPage(3);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::AutoType);
     QVERIFY(enableAutoTypeButton->isChecked());
     auto* customSequenceButton = editEntryWidget->findChild<QRadioButton*>("customSequenceButton");
     QTest::mouseClick(customSequenceButton, Qt::LeftButton);
@@ -1978,7 +2000,7 @@ void TestGui::testAutoType()
     QTest::keyClicks(sequenceEdit, "{USERNAME}{TAB}{TAB}{PASSWORD}{ENTER}");
 
     // 3.c) Save changes
-    editEntryWidget->setCurrentPage(0);
+    editEntryWidget->switchToPage(EditEntryWidget::Page::Main);
     QTest::mouseClick(editEntryWidgetButtonBox->button(QDialogButtonBox::Ok), Qt::LeftButton);
     QApplication::processEvents();
 

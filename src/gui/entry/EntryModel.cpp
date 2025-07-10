@@ -116,7 +116,7 @@ int EntryModel::columnCount(const QModelIndex& parent) const
         return 0;
     }
 
-    return 15;
+    return 17;
 }
 
 QVariant EntryModel::data(const QModelIndex& index, int role) const
@@ -134,6 +134,11 @@ QVariant EntryModel::data(const QModelIndex& index, int role) const
         case ParentGroup:
             if (entry->group()) {
                 return entry->group()->name();
+            }
+            break;
+        case ParentGroupPath:
+            if (entry->group()) {
+                return entry->group()->fullPath();
             }
             break;
         case Title:
@@ -230,6 +235,13 @@ QVariant EntryModel::data(const QModelIndex& index, int role) const
 
             return result;
         }
+        case Color:
+            QColor backgroundColor;
+            backgroundColor.setNamedColor(entry->backgroundColor());
+            if (backgroundColor.isValid()) {
+                result = "▍";
+                return result;
+            }
         }
     } else if (role == Qt::UserRole) { // Qt::UserRole is used as sort role, see EntryView::EntryView()
         switch (index.column()) {
@@ -281,7 +293,7 @@ QVariant EntryModel::data(const QModelIndex& index, int role) const
             break;
         case Totp:
             if (entry->hasTotp()) {
-                return icons()->icon("totp");
+                return entry->hasValidTotp() ? icons()->icon("totp") : icons()->icon("totp-invalid");
             }
             break;
         case PasswordStrength:
@@ -320,6 +332,15 @@ QVariant EntryModel::data(const QModelIndex& index, int role) const
         }
         return font;
     } else if (role == Qt::ForegroundRole) {
+
+        if (index.column() == Color) {
+            QColor backgroundColor;
+            backgroundColor.setNamedColor(entry->backgroundColor());
+            if (backgroundColor.isValid()) {
+                return backgroundColor;
+            }
+        }
+
         QColor foregroundColor;
         foregroundColor.setNamedColor(entry->foregroundColor());
         if (entry->hasReferences()) {
@@ -333,10 +354,12 @@ QVariant EntryModel::data(const QModelIndex& index, int role) const
             return QVariant(foregroundColor);
         }
     } else if (role == Qt::BackgroundRole) {
-        QColor backgroundColor;
-        backgroundColor.setNamedColor(entry->backgroundColor());
-        if (backgroundColor.isValid()) {
-            return QVariant(backgroundColor);
+        if (m_backgroundColorVisible) {
+            QColor backgroundColor;
+            backgroundColor.setNamedColor(entry->backgroundColor());
+            if (backgroundColor.isValid()) {
+                return QVariant(backgroundColor);
+            }
         }
     } else if (role == Qt::ToolTipRole) {
         if (index.column() == PasswordStrength && !entry->password().isEmpty() && !entry->excludeFromReports()) {
@@ -355,6 +378,8 @@ QVariant EntryModel::headerData(int section, Qt::Orientation orientation, int ro
         switch (section) {
         case ParentGroup:
             return tr("Group");
+        case ParentGroupPath:
+            return tr("Group Path");
         case Title:
             return tr("Title");
         case Username:
@@ -392,6 +417,8 @@ QVariant EntryModel::headerData(int section, Qt::Orientation orientation, int ro
         switch (section) {
         case ParentGroup:
             return tr("Group name");
+        case ParentGroupPath:
+            return tr("Group Path");
         case Title:
             return tr("Entry title");
         case Username:
@@ -420,6 +447,8 @@ QVariant EntryModel::headerData(int section, Qt::Orientation orientation, int ro
             return tr("Has attachments");
         case Totp:
             return tr("Has TOTP");
+        case Color:
+            return tr("Background Color");
         }
     }
 
@@ -601,4 +630,8 @@ void EntryModel::makeConnections(const Group* group)
     connect(group, SIGNAL(entryAboutToMoveDown(int)), SLOT(entryAboutToMoveDown(int)));
     connect(group, SIGNAL(entryMovedDown()), SLOT(entryMovedDown()));
     connect(group, SIGNAL(entryDataChanged(Entry*)), SLOT(entryDataChanged(Entry*)));
+}
+void EntryModel::setBackgroundColorVisible(bool visible)
+{
+    m_backgroundColorVisible = visible;
 }

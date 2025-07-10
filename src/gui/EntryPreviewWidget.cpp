@@ -49,7 +49,7 @@ EntryPreviewWidget::EntryPreviewWidget(QWidget* parent)
 
     // Entry
     m_ui->entryTotpButton->setIcon(icons()->icon("totp"));
-    m_ui->entryCloseButton->setIcon(icons()->icon("dialog-close"));
+    m_ui->entryCloseButton->setIcon(icons()->icon("arrow-collapse-down"));
     m_ui->toggleUsernameButton->setIcon(icons()->onOffIcon("password-show", true));
     m_ui->togglePasswordButton->setIcon(icons()->onOffIcon("password-show", true));
     m_ui->toggleEntryNotesButton->setIcon(icons()->onOffIcon("password-show", true));
@@ -69,8 +69,7 @@ EntryPreviewWidget::EntryPreviewWidget(QWidget* parent)
 
     m_ui->entryTotpLabel->installEventFilter(this);
 
-    connect(m_ui->entryTotpButton, SIGNAL(toggled(bool)), m_ui->entryTotpLabel, SLOT(setVisible(bool)));
-    connect(m_ui->entryTotpButton, SIGNAL(toggled(bool)), m_ui->entryTotpProgress, SLOT(setVisible(bool)));
+    connect(m_ui->entryTotpButton, SIGNAL(toggled(bool)), m_ui->entryTotp, SLOT(setVisible(bool)));
     connect(m_ui->entryCloseButton, SIGNAL(clicked()), SLOT(hide()));
     connect(m_ui->toggleUsernameButton, SIGNAL(clicked(bool)), SLOT(setUsernameVisible(bool)));
     connect(m_ui->togglePasswordButton, SIGNAL(clicked(bool)), SLOT(setPasswordVisible(bool)));
@@ -261,8 +260,7 @@ void EntryPreviewWidget::updateEntryTotp()
         m_ui->entryTotpProgress->setMaximum(m_currentEntry->totpSettings()->step);
         updateTotpLabel();
     } else {
-        m_ui->entryTotpLabel->hide();
-        m_ui->entryTotpProgress->hide();
+        m_ui->entryTotp->hide();
         m_ui->entryTotpButton->setChecked(false);
         m_ui->entryTotpLabel->clear();
         m_totpTimer.stop();
@@ -303,9 +301,11 @@ void EntryPreviewWidget::setPasswordVisible(bool state)
                 html += "<span style=\"color: " + QString(color) + ";\">" + QString(c).toHtmlEscaped() + "</span>";
             }
             // clang-format on
+            m_ui->entryPasswordLabel->setTextFormat(Qt::RichText);
             m_ui->entryPasswordLabel->setText(html);
         } else {
             // No color
+            m_ui->entryPasswordLabel->setTextFormat(Qt::PlainText);
             m_ui->entryPasswordLabel->setText(password);
         }
     } else if (password.isEmpty() && !config()->get(Config::Security_PasswordEmptyPlaceholder).toBool()) {
@@ -322,7 +322,8 @@ void EntryPreviewWidget::setPasswordVisible(bool state)
 
 void EntryPreviewWidget::setEntryNotesVisible(bool state)
 {
-    setNotesVisible(m_ui->entryNotesTextEdit, m_currentEntry->notes(), state);
+    setNotesVisible(
+        m_ui->entryNotesTextEdit, m_currentEntry->resolveMultiplePlaceholders(m_currentEntry->notes()), state);
     m_ui->toggleEntryNotesButton->setIcon(icons()->onOffIcon("password-show", state));
 }
 
@@ -387,7 +388,7 @@ void EntryPreviewWidget::updateEntryGeneralTab()
         m_ui->entryNotesTextEdit->setFont(Font::defaultFont());
     }
 
-    m_ui->entryUrlLabel->setRawText(m_currentEntry->displayUrl());
+    m_ui->entryUrlLabel->setRawText(m_currentEntry->displayUrl().toHtmlEscaped());
     const QString url = m_currentEntry->url();
     if (!url.isEmpty()) {
         // URL is well formed and can be opened in a browser
@@ -429,6 +430,8 @@ void EntryPreviewWidget::updateEntryAdvancedTab()
             m_ui->entryAttributesTable->item(i, 0)->setFont(font);
             m_ui->entryAttributesTable->item(i, 0)->setTextAlignment(Qt::AlignTop | Qt::AlignLeft);
 
+            auto value = m_currentEntry->resolveMultiplePlaceholders(attributes->value(key));
+
             if (attributes->isProtected(key)) {
                 // only show the reveal button on protected attributes
                 auto button = new QToolButton();
@@ -455,10 +458,10 @@ void EntryPreviewWidget::updateEntryAdvancedTab()
                 m_ui->entryAttributesTable->setCellWidget(i, 1, button);
                 m_ui->entryAttributesTable->setItem(i, 2, new QTableWidgetItem(QString("\u25cf").repeated(6)));
             } else {
-                m_ui->entryAttributesTable->setItem(i, 2, new QTableWidgetItem(attributes->value(key)));
+                m_ui->entryAttributesTable->setItem(i, 2, new QTableWidgetItem(value));
             }
 
-            m_ui->entryAttributesTable->item(i, 2)->setData(Qt::UserRole, attributes->value(key));
+            m_ui->entryAttributesTable->item(i, 2)->setData(Qt::UserRole, value);
             m_ui->entryAttributesTable->item(i, 2)->setToolTip(tr("Double click to copy value"));
             m_ui->entryAttributesTable->item(i, 2)->setTextAlignment(Qt::AlignTop | Qt::AlignLeft);
 
@@ -544,16 +547,23 @@ void EntryPreviewWidget::updateGroupSharingTab()
 void EntryPreviewWidget::updateTotpLabel()
 {
     if (!m_locked && m_currentEntry && m_currentEntry->hasTotp()) {
-        auto totpCode = m_currentEntry->totp();
-        totpCode.insert(totpCode.size() / 2, " ");
-        m_ui->entryTotpLabel->setText(totpCode);
+        bool isValid = false;
+        auto totpCode = m_currentEntry->totp(&isValid);
+        if (isValid) {
+            totpCode.insert(totpCode.size() / 2, " ");
 
-        auto step = m_currentEntry->totpSettings()->step;
-        auto timeleft = step - (Clock::currentSecondsSinceEpoch() % step);
-        m_ui->entryTotpProgress->setValue(timeleft);
-        m_ui->entryTotpProgress->update();
+            auto step = m_currentEntry->totpSettings()->step;
+            auto timeleft = step - (Clock::currentSecondsSinceEpoch() % step);
+            m_ui->entryTotpProgress->setValue(timeleft);
+            m_ui->entryTotpProgress->update();
+        } else {
+            m_totpTimer.stop();
+        }
+
+        m_ui->entryTotpProgress->setVisible(isValid);
+        m_ui->entryTotpLabel->setText(totpCode);
     } else {
-        m_ui->entryTotpLabel->clear();
+        m_ui->entryTotp->setVisible(false);
         m_totpTimer.stop();
     }
 }

@@ -137,10 +137,12 @@ Files: share/icons/badges/2_Expired.svg
        share/icons/database/C46_Help.svg
        share/icons/database/C53_Apply.svg
        share/icons/database/C61_Services.svg
+       share/icons/application/scalable/actions/proton.svg
 Copyright: 2022 KeePassXC Team <team@keepassxc.org>
 License: MIT
 
 Files: share/icons/application/scalable/actions/application-exit.svg
+       share/icons/application/scalable/actions/arrow-collapse-down.svg
        share/icons/application/scalable/actions/attributes-copy.svg
        share/icons/application/scalable/actions/auto-type.svg
        share/icons/application/scalable/actions/bitwarden.svg
@@ -176,6 +178,7 @@ Files: share/icons/application/scalable/actions/application-exit.svg
        share/icons/application/scalable/actions/entry-delete.svg
        share/icons/application/scalable/actions/entry-restore.svg
        share/icons/application/scalable/actions/entry-edit.svg
+       share/icons/application/scalable/actions/entry-expire.svg
        share/icons/application/scalable/actions/entry-new.svg
        share/icons/application/scalable/actions/favicon-download.svg
        share/icons/application/scalable/actions/fingerprint.svg
@@ -219,6 +222,7 @@ Files: share/icons/application/scalable/actions/application-exit.svg
        share/icons/application/scalable/actions/totp-copy.svg
        share/icons/application/scalable/actions/totp-copy-password.svg
        share/icons/application/scalable/actions/totp-edit.svg
+       share/icons/application/scalable/actions/totp-invalid.svg
        share/icons/application/scalable/actions/trash.svg
        share/icons/application/scalable/actions/url-copy.svg
        share/icons/application/scalable/actions/user-guide.svg

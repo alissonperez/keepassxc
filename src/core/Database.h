@@ -75,6 +75,9 @@ public:
     ~Database() override;
 
 private:
+    // size of the block of file data to hash for detecting external changes
+    static const quint32 kFileBlockToHashSizeBytes = 1024; // 1 KiB
+
     bool writeDatabase(QIODevice* device, QString* error = nullptr);
     bool backupDatabase(const QString& filePath, const QString& destinationFilePath);
     bool restoreDatabase(const QString& filePath, const QString& fromBackupFilePath);
@@ -106,6 +109,10 @@ public:
     QString filePath() const;
     QString canonicalFilePath() const;
     void setFilePath(const QString& filePath);
+
+    const QByteArray& fileBlockHash() const;
+    void setIgnoreFileChangesUntilSaved(bool ignore);
+    bool ignoreFileChangesUntilSaved() const;
 
     QString publicName();
     void setPublicName(const QString& name);
@@ -177,7 +184,7 @@ signals:
     void databaseOpened();
     void databaseSaved();
     void databaseDiscarded();
-    void databaseFileChanged();
+    void databaseFileChanged(bool triggeredBySave);
     void databaseNonDataChanged();
     void tagListUpdated();
 
@@ -229,6 +236,8 @@ private:
     void startModifiedTimer();
     void stopModifiedTimer();
 
+    QByteArray m_fileBlockHash;
+    bool m_ignoreFileChangesUntilSaved;
     QPointer<Metadata> const m_metadata;
     DatabaseData m_data;
     QPointer<Group> m_rootGroup;

@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2018 KeePassXC Team <team@keepassxc.org>
+ *  Copyright (C) 2025 KeePassXC Team <team@keepassxc.org>
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -15,17 +15,31 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "SettingsWidget.h"
+#pragma once
 
-SettingsWidget::SettingsWidget(QWidget* parent)
-    : QWidget(parent)
+#include "attachments/AttachmentTypes.h"
+
+#include <QDialog>
+#include <QPointer>
+
+namespace Ui
 {
+    class EditEntryAttachmentsDialog;
 }
 
-SettingsWidget::~SettingsWidget()
-{
-}
+class EntryAttachments;
 
-void SettingsWidget::discard()
+class EditEntryAttachmentsDialog : public QDialog
 {
-}
+    Q_OBJECT
+
+public:
+    explicit EditEntryAttachmentsDialog(QWidget* parent = nullptr);
+    ~EditEntryAttachmentsDialog() override;
+
+    void setAttachment(attachments::Attachment attachment);
+    attachments::Attachment getAttachment() const;
+
+private:
+    QScopedPointer<Ui::EditEntryAttachmentsDialog> m_ui;
+};

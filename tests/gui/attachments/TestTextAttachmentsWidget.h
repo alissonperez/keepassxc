@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2019 Aetf <aetf@unlimitedcodeworks.xyz>
+ *  Copyright (C) 2025 KeePassXC Team <team@keepassxc.org>
  *
  *  This program is free software: you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -15,22 +15,28 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef KEEPASSXC_DATABASESETTINGSPAGEFDOSECRETS_H
-#define KEEPASSXC_DATABASESETTINGSPAGEFDOSECRETS_H
+#pragma once
 
-#include "gui/dbsettings/DatabaseSettingsDialog.h"
+#include <attachments/TextAttachmentsWidget.h>
 
-class DatabaseSettingsPageFdoSecrets : public IDatabaseSettingsPage
+#include <QObject>
+#include <QScopedPointer>
+
+class TestTextAttachmentsWidget : public QObject
 {
-    Q_DISABLE_COPY(DatabaseSettingsPageFdoSecrets)
-public:
-    DatabaseSettingsPageFdoSecrets() = default;
+    Q_OBJECT
 
-    QString name() override;
-    QIcon icon() override;
-    QWidget* createWidget() override;
-    void loadSettings(QWidget* widget, QSharedPointer<Database> db) override;
-    void saveSettings(QWidget* widget) override;
+private slots:
+    void initTestCase();
+
+    void testInitTextWidget();
+    void testTextReadWriteWidget();
+    void testTextReadWidget();
+    void testOpenPreviewButton();
+    void testPreviewTextChanged();
+    void testTextChanged();
+    void testTextChangedInReadOnlyMode();
+
+private:
+    QScopedPointer<TextAttachmentsWidget> m_textWidget;
 };
-
-#endif // KEEPASSXC_DATABASESETTINGSPAGEFDOSECRETS_H

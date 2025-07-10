@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2018 KeePassXC Team <team@keepassxc.org>
+ *  Copyright (C) 2024 KeePassXC Team <team@keepassxc.org>
  *  Copyright (C) 2018 Sami Vänttinen <sami.vanttinen@protonmail.com>
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -47,7 +47,7 @@ public:
 public slots:
     void initialize() override;
     void uninitialize() override;
-    bool save() override;
+    bool saveSettings() override;
 
 private slots:
     void removeSelectedKey();
@@ -63,6 +63,8 @@ private slots:
 private:
     void updateModel();
     void settingsWarning();
+    void replaceKey(const QString& prefix, const QString& oldName, const QString& newName) const;
+    QString getKeyWithPrefix(const QString& prefix, const QString& key) const;
 
 protected:
     void showEvent(QShowEvent* event) override;

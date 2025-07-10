@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2024 KeePassXC Team <team@keepassxc.org>
+ *  Copyright (C) 2025 KeePassXC Team <team@keepassxc.org>
  *  Copyright (C) 2017 Sami Vänttinen <sami.vanttinen@protonmail.com>
  *  Copyright (C) 2013 Francois Ferrand
  *
@@ -124,6 +124,8 @@ public:
     void requestGlobalAutoType(const QString& search);
     static void convertAttributesToCustomData(QSharedPointer<Database> db);
 
+    static QString decodeCustomDataRestrictKey(const QString& key);
+
     static const QString KEEPASSXCBROWSER_NAME;
     static const QString KEEPASSXCBROWSER_OLD_NAME;
     static const QString OPTION_SKIP_AUTO_SUBMIT;
@@ -131,6 +133,7 @@ public:
     static const QString OPTION_ONLY_HTTP_AUTH;
     static const QString OPTION_NOT_HTTP_AUTH;
     static const QString OPTION_OMIT_WWW;
+    static const QString OPTION_RESTRICT_KEY;
 
 signals:
     void requestUnlock();
@@ -143,6 +146,7 @@ public slots:
 
 private slots:
     void processClientMessage(QLocalSocket* socket, const QJsonObject& message);
+    void handleDatabaseUnlockDialogFinished(bool accepted, DatabaseWidget* dbWidget);
 
 private:
     enum Access
@@ -162,6 +166,7 @@ private:
     QList<Entry*> searchEntries(const QSharedPointer<Database>& db,
                                 const QString& siteUrl,
                                 const QString& formUrl,
+                                const QStringList& keys = {},
                                 bool passkey = false);
     QList<Entry*>
     searchEntries(const QString& siteUrl, const QString& formUrl, const StringPairList& keyList, bool passkey = false);
@@ -195,7 +200,9 @@ private:
     bool handleURL(const QString& entryUrl,
                    const QString& siteUrl,
                    const QString& formUrl,
-                   const bool omitWwwSubdomain = false);
+                   const bool omitWwwSubdomain = false,
+                   const bool allowWildcards = false);
+    bool handleURLWithWildcards(const QUrl& entryQUrl, const QString& siteUrl);
     QString getDatabaseRootUuid();
     QString getDatabaseRecycleBinUuid();
     bool checkLegacySettings(QSharedPointer<Database> db);

@@ -201,6 +201,9 @@ void TestEntryModel::testAttributesModel()
 
     // make sure these don't generate messages
     entryAttributes->set("Title", "test");
+    entryAttributes->set("UserName", "test");
+    entryAttributes->set("Password", "test");
+    entryAttributes->set("URL", "test");
     entryAttributes->set("Notes", "test");
 
     QCOMPARE(spyDataChanged.count(), 1);
@@ -214,6 +217,16 @@ void TestEntryModel::testAttributesModel()
     entryAttributes->set("2nd", value, true);
     QVERIFY(entryAttributes->isProtected("2nd"));
     QCOMPARE(entryAttributes->value("2nd"), value);
+    entryAttributes->clear();
+
+    // test attribute sorting
+    entryAttributes->set("Test1", "1");
+    entryAttributes->set("Test11", "11");
+    entryAttributes->set("Test2", "2");
+    QCOMPARE(model->rowCount(), 3);
+    QCOMPARE(model->data(model->index(0, 0)).toString(), QString("Test1"));
+    QCOMPARE(model->data(model->index(1, 0)).toString(), QString("Test2"));
+    QCOMPARE(model->data(model->index(2, 0)).toString(), QString("Test11"));
 
     QSignalSpy spyReset(model, SIGNAL(modelReset()));
     entryAttributes->clear();
@@ -313,15 +326,11 @@ void TestEntryModel::testProxyModel()
 
     modelSource->setGroup(db->rootGroup());
 
-    /**
-     * @author Fonic <https://github.com/fonic>
-     * Update comparison value of modelProxy->columnCount() to account for
-     * additional columns 'Password', 'Notes', 'Expires', 'Created', 'Modified',
-     * 'Accessed', 'Paperclip', 'Attachments', and TOTP
-     */
+    // Test hiding and showing a column
+    auto columnCount = modelProxy->columnCount();
     QSignalSpy spyColumnRemove(modelProxy, SIGNAL(columnsAboutToBeRemoved(QModelIndex, int, int)));
     modelProxy->hideColumn(0, true);
-    QCOMPARE(modelProxy->columnCount(), 14);
+    QCOMPARE(modelProxy->columnCount(), columnCount - 1);
     QVERIFY(!spyColumnRemove.isEmpty());
 
     int oldSpyColumnRemoveSize = spyColumnRemove.size();
@@ -335,15 +344,9 @@ void TestEntryModel::testProxyModel()
     entryList << entry;
     modelSource->setEntries(entryList);
 
-    /**
-     * @author Fonic <https://github.com/fonic>
-     * Update comparison value of modelProxy->columnCount() to account for
-     * additional columns 'Password', 'Notes', 'Expires', 'Created', 'Modified',
-     * 'Accessed', 'Paperclip', 'Attachments', and TOTP
-     */
     QSignalSpy spyColumnInsert(modelProxy, SIGNAL(columnsAboutToBeInserted(QModelIndex, int, int)));
     modelProxy->hideColumn(0, false);
-    QCOMPARE(modelProxy->columnCount(), 15);
+    QCOMPARE(modelProxy->columnCount(), columnCount);
     QVERIFY(!spyColumnInsert.isEmpty());
 
     int oldSpyColumnInsertSize = spyColumnInsert.size();

@@ -88,9 +88,12 @@ MessageBox::Button MessageBox::messageBox(QWidget* parent,
 {
     if (m_nextAnswer == MessageBox::NoButton) {
         QMessageBox msgBox(parent);
+        msgBox.setTextFormat(Qt::RichText);
         msgBox.setIcon(icon);
         msgBox.setWindowTitle(title);
-        msgBox.setText(text);
+        // Replace newlines with HTML line breaks
+        auto fixedText = text;
+        msgBox.setText(fixedText.replace("\n", "<br>"));
 
         if (m_overrideParent) {
             // Force the creation of the QWindow, without this windowHandle() will return nullptr

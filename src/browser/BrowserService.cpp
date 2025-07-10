@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2024 KeePassXC Team <team@keepassxc.org>
+ *  Copyright (C) 2025 KeePassXC Team <team@keepassxc.org>
  *  Copyright (C) 2017 Sami Vänttinen <sami.vanttinen@protonmail.com>
  *  Copyright (C) 2013 Francois Ferrand
  *
@@ -24,6 +24,7 @@
 #include "BrowserHost.h"
 #include "BrowserMessageBuilder.h"
 #include "BrowserSettings.h"
+#include "core/EntryAttributes.h"
 #include "core/Tools.h"
 #include "core/UrlTools.h"
 #include "gui/MainWindow.h"
@@ -49,6 +50,7 @@
 #include <QListWidget>
 #include <QLocalSocket>
 #include <QProgressDialog>
+#include <QStringView>
 #include <QUrl>
 
 const QString BrowserService::KEEPASSXCBROWSER_NAME = QStringLiteral("KeePassXC-Browser Settings");
@@ -68,6 +70,7 @@ const QString BrowserService::OPTION_HIDE_ENTRY = QStringLiteral("BrowserHideEnt
 const QString BrowserService::OPTION_ONLY_HTTP_AUTH = QStringLiteral("BrowserOnlyHttpAuth");
 const QString BrowserService::OPTION_NOT_HTTP_AUTH = QStringLiteral("BrowserNotHttpAuth");
 const QString BrowserService::OPTION_OMIT_WWW = QStringLiteral("BrowserOmitWww");
+const QString BrowserService::OPTION_RESTRICT_KEY = QStringLiteral("BrowserRestrictKey");
 
 Q_GLOBAL_STATIC(BrowserService, s_browserService);
 
@@ -83,6 +86,10 @@ BrowserService::BrowserService()
     connect(getMainWindow(), &MainWindow::databaseUnlocked, this, &BrowserService::databaseUnlocked);
     connect(getMainWindow(), &MainWindow::databaseLocked, this, &BrowserService::databaseLocked);
     connect(getMainWindow(), &MainWindow::activeDatabaseChanged, this, &BrowserService::activeDatabaseChanged);
+    connect(getMainWindow(),
+            &MainWindow::databaseUnlockDialogFinished,
+            this,
+            &BrowserService::handleDatabaseUnlockDialogFinished);
 
     setEnabled(browserSettings()->isEnabled());
 }
@@ -322,6 +329,7 @@ QJsonObject BrowserService::createNewGroup(const QString& groupName, bool isPass
             }
 #endif
             name = newGroup->name();
+            newGroup->setCustomDataTriState(BrowserService::OPTION_HIDE_ENTRY, Group::Disable);
             uuid = Tools::uuidToHex(newGroup->uuid());
             previousGroup = newGroup;
             continue;
@@ -609,8 +617,8 @@ QString BrowserService::storeKey(const QString& key)
 
     hideWindow();
     db->metadata()->customData()->set(CustomData::BrowserKeyPrefix + id, key);
-    db->metadata()->customData()->set(QString("%1_%2").arg(CustomData::Created, id),
-                                      Clock::currentDateTime().toString(Qt::SystemLocaleShortDate));
+    db->metadata()->customData()->set(QString("%1%2").arg(CustomData::Created, id),
+                                      QLocale::system().toString(Clock::currentDateTime(), QLocale::ShortFormat));
     return id;
 }
 
@@ -761,9 +769,9 @@ QJsonObject BrowserService::showPasskeysAuthenticationPrompt(const QJsonObject& 
             return getPasskeyError(ERROR_PASSKEYS_UNKNOWN_ERROR);
         }
 
-        const auto privateKeyPem = selectedEntry->attributes()->value(BrowserPasskeys::KPEX_PASSKEY_PRIVATE_KEY_PEM);
+        const auto privateKeyPem = selectedEntry->attributes()->value(EntryAttributes::KPEX_PASSKEY_PRIVATE_KEY_PEM);
         const auto credentialId = passkeyUtils()->getCredentialIdFromEntry(selectedEntry);
-        const auto userHandle = selectedEntry->attributes()->value(BrowserPasskeys::KPEX_PASSKEY_USER_HANDLE);
+        const auto userHandle = selectedEntry->attributes()->value(EntryAttributes::KPEX_PASSKEY_USER_HANDLE);
 
         auto publicKeyCredential =
             browserPasskeys()->buildGetPublicKeyCredential(assertionOptions, credentialId, userHandle, privateKeyPem);
@@ -841,11 +849,11 @@ void BrowserService::addPasskeyToEntry(Entry* entry,
 
     entry->beginUpdate();
 
-    entry->attributes()->set(BrowserPasskeys::KPEX_PASSKEY_USERNAME, username);
-    entry->attributes()->set(BrowserPasskeys::KPEX_PASSKEY_CREDENTIAL_ID, credentialId, true);
-    entry->attributes()->set(BrowserPasskeys::KPEX_PASSKEY_PRIVATE_KEY_PEM, privateKey, true);
-    entry->attributes()->set(BrowserPasskeys::KPEX_PASSKEY_RELYING_PARTY, rpId);
-    entry->attributes()->set(BrowserPasskeys::KPEX_PASSKEY_USER_HANDLE, userHandle, true);
+    entry->attributes()->set(EntryAttributes::KPEX_PASSKEY_USERNAME, username);
+    entry->attributes()->set(EntryAttributes::KPEX_PASSKEY_CREDENTIAL_ID, credentialId, true);
+    entry->attributes()->set(EntryAttributes::KPEX_PASSKEY_PRIVATE_KEY_PEM, privateKey, true);
+    entry->attributes()->set(EntryAttributes::KPEX_PASSKEY_RELYING_PARTY, rpId);
+    entry->attributes()->set(EntryAttributes::KPEX_PASSKEY_USER_HANDLE, userHandle, true);
     entry->addTag(tr("Passkey"));
 
     entry->endUpdate();
@@ -1003,6 +1011,7 @@ void BrowserService::removePluginData(Entry* entry) const
 QList<Entry*> BrowserService::searchEntries(const QSharedPointer<Database>& db,
                                             const QString& siteUrl,
                                             const QString& formUrl,
+                                            const QStringList& keys,
                                             bool passkey)
 {
     QList<Entry*> entries;
@@ -1014,6 +1023,12 @@ QList<Entry*> BrowserService::searchEntries(const QSharedPointer<Database>& db,
     for (const auto& group : rootGroup->groupsRecursive(true)) {
         if (group->isRecycled()
             || group->resolveCustomDataTriState(BrowserService::OPTION_HIDE_ENTRY) == Group::Enable) {
+            continue;
+        }
+
+        // If a key restriction is specified and not contained in the keys list then skip this group.
+        auto restrictKey = group->resolveCustomDataString(BrowserService::OPTION_RESTRICT_KEY);
+        if (!restrictKey.isEmpty() && !keys.contains(restrictKey)) {
             continue;
         }
 
@@ -1033,7 +1048,7 @@ QList<Entry*> BrowserService::searchEntries(const QSharedPointer<Database>& db,
 
 #ifdef WITH_XC_BROWSER_PASSKEYS
             // With Passkeys, check for the Relying Party instead of URL
-            if (passkey && entry->attributes()->value(BrowserPasskeys::KPEX_PASSKEY_RELYING_PARTY) != siteUrl) {
+            if (passkey && entry->attributes()->value(EntryAttributes::KPEX_PASSKEY_RELYING_PARTY) != siteUrl) {
                 continue;
             }
 #endif
@@ -1053,30 +1068,35 @@ QList<Entry*> BrowserService::searchEntries(const QString& siteUrl,
                                             const StringPairList& keyList,
                                             bool passkey)
 {
-    // Check if database is connected with KeePassXC-Browser
+    // Check if database is connected with KeePassXC-Browser. If so, return browser key (otherwise empty)
     auto databaseConnected = [&](const QSharedPointer<Database>& db) {
         for (const StringPair& keyPair : keyList) {
             QString key = db->metadata()->customData()->value(CustomData::BrowserKeyPrefix + keyPair.first);
             if (!key.isEmpty() && keyPair.second == key) {
-                return true;
+                return keyPair.first;
             }
         }
-        return false;
+        return QString();
     };
 
     // Get the list of databases to search
     QList<QSharedPointer<Database>> databases;
+    QStringList keys;
     if (browserSettings()->searchInAllDatabases()) {
         for (auto dbWidget : getMainWindow()->getOpenDatabases()) {
             auto db = dbWidget->database();
-            if (db && databaseConnected(dbWidget->database())) {
+            auto key = databaseConnected(dbWidget->database());
+            if (db && !key.isEmpty()) {
                 databases << db;
+                keys << key;
             }
         }
     } else {
         const auto& db = getDatabase();
-        if (databaseConnected(db)) {
+        auto key = databaseConnected(db);
+        if (!key.isEmpty()) {
             databases << db;
+            keys << key;
         }
     }
 
@@ -1085,7 +1105,7 @@ QList<Entry*> BrowserService::searchEntries(const QString& siteUrl,
     QList<Entry*> entries;
     do {
         for (const auto& db : databases) {
-            entries << searchEntries(db, siteUrl, formUrl, passkey);
+            entries << searchEntries(db, siteUrl, formUrl, keys, passkey);
         }
     } while (entries.isEmpty() && removeFirstDomain(hostname));
 
@@ -1165,6 +1185,11 @@ void BrowserService::convertAttributesToCustomData(QSharedPointer<Database> db)
     }
 }
 
+QString BrowserService::decodeCustomDataRestrictKey(const QString& key)
+{
+    return key.isEmpty() ? tr("Disable") : key;
+}
+
 void BrowserService::requestGlobalAutoType(const QString& search)
 {
     emit osUtils->globalShortcutTriggered("autotype", search);
@@ -1237,7 +1262,7 @@ QJsonObject BrowserService::prepareEntry(const Entry* entry)
     res["uuid"] = entry->resolveMultiplePlaceholders(entry->uuidToHex());
     res["group"] = entry->resolveMultiplePlaceholders(entry->group()->name());
 
-    if (entry->hasTotp()) {
+    if (entry->hasValidTotp()) {
         res["totp"] = entry->totp();
     }
 
@@ -1422,9 +1447,15 @@ bool BrowserService::shouldIncludeEntry(Entry* entry,
         return url.endsWith("by-path/" + entry->path());
     }
 
-    const auto allEntryUrls = entry->getAllUrls();
-    for (const auto& entryUrl : allEntryUrls) {
-        if (handleURL(entryUrl, url, submitUrl, omitWwwSubdomain)) {
+    // Handle the entry URL
+    if (handleURL(entry->resolveUrl(), url, submitUrl, omitWwwSubdomain)) {
+        return true;
+    }
+
+    // Handle additional URLs
+    const auto additionalUrls = entry->getAdditionalUrls();
+    for (const auto& additionalUrl : additionalUrls) {
+        if (handleURL(additionalUrl, url, submitUrl, omitWwwSubdomain, true)) {
             return true;
         }
     }
@@ -1438,7 +1469,7 @@ QList<Entry*> BrowserService::getPasskeyEntries(const QString& rpId, const Strin
 {
     QList<Entry*> entries;
     for (const auto& entry : searchEntries(rpId, "", keyList, true)) {
-        if (entry->hasPasskey() && entry->attributes()->value(BrowserPasskeys::KPEX_PASSKEY_RELYING_PARTY) == rpId) {
+        if (entry->hasPasskey() && entry->attributes()->value(EntryAttributes::KPEX_PASSKEY_RELYING_PARTY) == rpId) {
             entries << entry;
         }
     }
@@ -1453,8 +1484,8 @@ QList<Entry*> BrowserService::getPasskeyEntriesWithUserHandle(const QString& rpI
 {
     QList<Entry*> entries;
     for (const auto& entry : searchEntries(rpId, "", keyList, true)) {
-        if (entry->hasPasskey() && entry->attributes()->value(BrowserPasskeys::KPEX_PASSKEY_RELYING_PARTY) == rpId
-            && entry->attributes()->value(BrowserPasskeys::KPEX_PASSKEY_USER_HANDLE) == userId) {
+        if (entry->hasPasskey() && entry->attributes()->value(EntryAttributes::KPEX_PASSKEY_RELYING_PARTY) == rpId
+            && entry->attributes()->value(EntryAttributes::KPEX_PASSKEY_USER_HANDLE) == userId) {
             entries << entry;
         }
     }
@@ -1479,7 +1510,7 @@ QList<Entry*> BrowserService::getPasskeyAllowedEntries(const QJsonObject& assert
         // See: https://w3c.github.io/webauthn/#dom-authenticatorassertionresponse-userhandle
         if (allowedCredentials.contains(passkeyUtils()->getCredentialIdFromEntry(entry))
             || (allowedCredentials.isEmpty()
-                && entry->attributes()->hasKey(BrowserPasskeys::KPEX_PASSKEY_USER_HANDLE))) {
+                && entry->attributes()->hasKey(EntryAttributes::KPEX_PASSKEY_USER_HANDLE))) {
             entries << entry;
         }
     }
@@ -1512,17 +1543,35 @@ QJsonObject BrowserService::getPasskeyError(int errorCode) const
 bool BrowserService::handleURL(const QString& entryUrl,
                                const QString& siteUrl,
                                const QString& formUrl,
-                               const bool omitWwwSubdomain)
+                               const bool omitWwwSubdomain,
+                               const bool allowWildcards)
 {
     if (entryUrl.isEmpty()) {
         return false;
     }
 
+    bool isWildcardUrl = false;
+    auto tempUrl = entryUrl;
+
+    // Allows matching with exact URL and wildcards
+    if (allowWildcards) {
+        // Exact match where URL is wrapped inside " characters
+        if (entryUrl.startsWith("\"") && entryUrl.endsWith("\"")) {
+            return QStringView{entryUrl}.mid(1, entryUrl.length() - 2) == siteUrl;
+        }
+
+        // Replace wildcards
+        isWildcardUrl = entryUrl.contains("*");
+        if (isWildcardUrl) {
+            tempUrl = tempUrl.replace("*", UrlTools::URL_WILDCARD);
+        }
+    }
+
     QUrl entryQUrl;
     if (entryUrl.contains("://")) {
-        entryQUrl = entryUrl;
+        entryQUrl = tempUrl;
     } else {
-        entryQUrl = QUrl::fromUserInput(entryUrl);
+        entryQUrl = QUrl::fromUserInput(tempUrl);
 
         if (browserSettings()->matchUrlScheme()) {
             entryQUrl.setScheme("https");
@@ -1562,6 +1611,11 @@ bool BrowserService::handleURL(const QString& entryUrl,
         return false;
     }
 
+    // Use wildcard matching instead
+    if (isWildcardUrl) {
+        return handleURLWithWildcards(entryQUrl, siteUrl);
+    }
+
     // Match the base domain
     if (urlTools()->getBaseDomainFromUrl(siteQUrl.host()) != urlTools()->getBaseDomainFromUrl(entryQUrl.host())) {
         return false;
@@ -1573,6 +1627,46 @@ bool BrowserService::handleURL(const QString& entryUrl,
     }
 
     return false;
+}
+
+bool BrowserService::handleURLWithWildcards(const QUrl& entryQUrl, const QString& siteUrl)
+{
+    auto matchWithRegex = [&](QString firstPart, const QString& secondPart, bool hostnameUsed = false) {
+        if (firstPart == secondPart) {
+            return true;
+        }
+
+        // If there's no wildcard with hostname, just compare directly
+        if (hostnameUsed && !firstPart.contains(UrlTools::URL_WILDCARD) && firstPart != secondPart) {
+            return false;
+        }
+
+        // Escape illegal characters
+        auto re = firstPart.replace(QRegularExpression(R"(([!\^\$\+\-\(\)@<>]))"), "\\\\1");
+
+        if (hostnameUsed) {
+            // Replace all host parts with wildcards
+            re = re.replace(QString("%1.").arg(UrlTools::URL_WILDCARD), "(.*?)");
+        }
+
+        // Append a + to the end of regex to match all paths after the last asterisk
+        if (re.endsWith(UrlTools::URL_WILDCARD)) {
+            re.append("+");
+        }
+
+        // Replace any remaining wildcards for paths
+        re = re.replace(UrlTools::URL_WILDCARD, "(.*?)");
+        return QRegularExpression(re).match(secondPart).hasMatch();
+    };
+
+    // Match hostname and path
+    QUrl siteQUrl = siteUrl;
+    if (!matchWithRegex(entryQUrl.host(), siteQUrl.host(), true)
+        || !matchWithRegex(entryQUrl.path(), siteQUrl.path())) {
+        return false;
+    }
+
+    return true;
 }
 
 QSharedPointer<Database> BrowserService::getDatabase(const QUuid& rootGroupUuid)
@@ -1812,6 +1906,15 @@ void BrowserService::activeDatabaseChanged(DatabaseWidget* dbWidget)
     }
 
     m_currentDatabaseWidget = dbWidget;
+}
+
+void BrowserService::handleDatabaseUnlockDialogFinished(bool accepted, DatabaseWidget* dbWidget)
+{
+    // User canceled the database open dialog
+    if (dbWidget && !accepted && m_bringToFrontRequested) {
+        m_bringToFrontRequested = false;
+        hideWindow();
+    }
 }
 
 void BrowserService::processClientMessage(QLocalSocket* socket, const QJsonObject& message)

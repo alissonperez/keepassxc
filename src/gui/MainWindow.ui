@@ -307,6 +307,9 @@
      <addaction name="actionEntrySetupTotp"/>
     </widget>
     <widget class="QMenu" name="menuTags">
+     <property name="tearOffEnabled">
+      <bool>true</bool>
+     </property>
      <property name="title">
       <string>Tags</string>
      </property>
@@ -314,6 +317,7 @@
     <addaction name="separator"/>
     <addaction name="actionEntryNew"/>
     <addaction name="actionEntryEdit"/>
+    <addaction name="actionEntryExpire"/>
     <addaction name="actionEntryClone"/>
     <addaction name="actionEntryDelete"/>
     <addaction name="separator"/>
@@ -361,6 +365,7 @@
      <string>&amp;Tools</string>
     </property>
     <addaction name="actionPasswordGenerator"/>
+    <addaction name="actionClearSSHAgent"/>
     <addaction name="actionSettings"/>
    </widget>
    <widget class="QMenu" name="menuView">
@@ -380,9 +385,13 @@
     <addaction name="actionCompactMode"/>
     <addaction name="actionAlwaysOnTop"/>
     <addaction name="actionAllowScreenCapture"/>
+    <addaction name="separator"/>
     <addaction name="actionShowPreviewPanel"/>
+    <addaction name="actionShowGroupPanel"/>
+    <addaction name="separator"/>
     <addaction name="actionShowMenubar"/>
     <addaction name="actionShowToolbar"/>
+    <addaction name="separator"/>
     <addaction name="actionHideUsernames"/>
     <addaction name="actionHidePasswords"/>
    </widget>
@@ -501,6 +510,14 @@
    </property>
    <property name="toolTip">
     <string>View or edit entry</string>
+   </property>
+  </action>
+  <action name="actionEntryExpire">
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>E&amp;xpire Entry…</string>
    </property>
   </action>
   <action name="actionEntryDelete">
@@ -1084,6 +1101,31 @@
   <action name="actionImport">
    <property name="text">
     <string>Import…</string>
+   </property>
+  </action>
+  <action name="actionShowGroupPanel">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Show Group Panel</string>
+   </property>
+   <property name="toolTip">
+    <string>Toggle Show Group Panel</string>
+   </property>
+  </action>
+  <action name="actionClearSSHAgent">
+   <property name="text">
+    <string>Clear SSH Agent</string>
+   </property>
+   <property name="toolTip">
+    <string>Clear all identities in ssh-agent</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::TextHeuristicRole</enum>
    </property>
   </action>
  </widget>
